@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         IMAGE_NAME = 'my-node-app'
-        DOCKER_HUB_USER = 'dharmala.vasavi@thebluespire.com' // Optional if pushing to Docker Hub
+        KUBECONFIG = '/root/.kube/config' // Update as per your Jenkins agent
     }
 
     stages {
@@ -22,21 +22,42 @@ pipeline {
         }
 
         stage('Run Tests') {
-             steps {
-        script {
-            docker.image('my-node-app').inside {
-                sh 'npm install'
-                echo "Skipping tests"
+            steps {
+                script {
+                    docker.image("${IMAGE_NAME}").inside {
+                        sh 'npm install'
+                        echo "Skipping tests"
+                    }
+                }
             }
         }
-    }
+
+        stage('Push Image to Registry') {
+            steps {
+                script {
+                    // For local K3d registry or Docker Hub
+                    sh "docker tag ${IMAGE_NAME} myregistry.localhost:5001/${IMAGE_NAME}:latest"
+                    sh "docker push myregistry.localhost:5001/${IMAGE_NAME}:latest"
+                }
+            }
         }
 
-        stage('Run Docker Container') {
+        stage('Deploy to K3d') {
             steps {
-                sh "docker run -d -p 3000:3000 ${IMAGE_NAME}"
+                script {
+                    sh "kubectl apply -f k8s/deployment.yaml"
+                    sh "kubectl apply -f k8s/service.yaml"
+                }
+            }
+        }
+
+        stage('Verify Deployment') {
+            steps {
+                script {
+                    sh "kubectl get pods"
+                    sh "kubectl get svc"
+                }
             }
         }
     }
 }
-
